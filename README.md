@@ -1,0 +1,1 @@
+Simulador de Processador Pipeline desenvolvido na disciplina de Arquitetura de Computadores.
