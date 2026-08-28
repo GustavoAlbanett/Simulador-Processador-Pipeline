@@ -5,6 +5,8 @@
 #define MEM_TAM 4096
 #define NUM_REGS 8
 
+#define TABELA_TAM 32   // TAMANHO TABELA PREDITOR
+
 // MEMORIAS
 uint16_t memoria[MEM_TAM];
 // uint16_t memoriaInstrucao[MEM_TAM];
@@ -26,6 +28,47 @@ typedef struct{
 	uint16_t reg;
 	uint16_t imediato;
 } Instrucao;
+
+
+typedef struct{
+	uint16_t existe;
+	uint16_t endereco;
+	uint16_t confianca;
+	uint16_t alvo;
+} Preditor;
+
+uint16_t prever(uint16_t pc){
+	Preditor *e = &tabela[pc & 0b11111];
+
+	if(e->existe == 1 && e->endereco == pc && e->confianca >= 2){       // se a mesma instrução ja existe e grande chance de pular, retorna o alvo do pulo 
+		return e->alvo;
+	}
+	else{                                         // se não, retorna o proximo endereço da memoria;
+		return pc+1;
+	}
+}
+
+void atualizarTabela(uint16_t pc, uint16_t pulou){
+	Preditor *e = &tabela[pc & 0b11111];
+
+	if(!e->existe || e->endereco != pc){      // significa que a instrução ainda não existe na tabela, vê se existe alguma com os  
+		e->existe = 1;
+		e->endereco = pc;
+
+		if(desviou == 1){                     // se pulou, o preditor ja começa em 1, se não em 0
+			e->confianca = 1;
+		}else{
+			e->confianca = 0;
+		}
+	}
+	else{
+		if(pulou == 1 && e->confianca < 3){                // se a instrução existe na tabela aumenta ou diminui a confiança no intervalo de 0 a 3
+			e->confianca++;
+		}else if (pulou = 0 && e->confianca > 0){
+			e->confianca--;
+		}
+	}
+}
 
 
 void decode(uint16_t instrucao, Instrucao *i){
@@ -166,6 +209,9 @@ int execucao(Instrucao *codigos, int ciclo){
 }
 
 void iniciar(){
+
+	Preditor tabela[TABELA_TAM];
+
 	while(PC < MEM_TAM){
 		ciclo++;
 		// BUSCA
@@ -192,5 +238,5 @@ int main (int argc, char **argv){
 
 	load_binary_to_memory(argv[1], memoria, MEM_TAM);
 
-	iniciar();
+
 }
