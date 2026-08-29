@@ -37,37 +37,49 @@ typedef struct{
 	uint16_t alvo;
 } Preditor;
 
+Preditor tabela[TABELA_TAM]; // Tabela que armazena as instruções para o preditor
+
+typedef struct{
+	uint16_t existe;
+	uint16_t pc;
+	uint16_t proximoEnd;
+	uint16_t instrTotal; 
+	Instrucao instr;
+} Intermediario;                        // Struct que carrega as informações entre busca -> decode e decode -> Execução/Writeback
+
 uint16_t prever(uint16_t pc){
 	Preditor *e = &tabela[pc & 0b11111];
 
-	if(e->existe == 1 && e->endereco == pc && e->confianca >= 2){       // se a mesma instrução ja existe e grande chance de pular, retorna o alvo do pulo 
+	if(e->existe == 1 && e->endereco == pc && e->confianca >= 2){       // se a mesma instrucao ja existe e grande chance de pular, retorna o alvo do pulo 
 		return e->alvo;
 	}
-	else{                                         // se não, retorna o proximo endereço da memoria;
+	else{                                         // se nao, retorna o proximo endereco da memoria;
 		return pc+1;
 	}
 }
 
-void atualizarTabela(uint16_t pc, uint16_t pulou){
+void atualizarTabela(uint16_t pc, uint16_t pulou, uint16_t alvoJump){
 	Preditor *e = &tabela[pc & 0b11111];
 
-	if(!e->existe || e->endereco != pc){      // significa que a instrução ainda não existe na tabela, vê se existe alguma com os  
+	if(!e->existe || e->endereco != pc){      // significa que a instrucao ainda nao existe na tabela, ve se existe alguma com os  
 		e->existe = 1;
 		e->endereco = pc;
 
-		if(desviou == 1){                     // se pulou, o preditor ja começa em 1, se não em 0
+		if(pulou == 1){                     // se pulou, o preditor ja comeca em 1, se nao em 0
 			e->confianca = 1;
 		}else{
 			e->confianca = 0;
 		}
 	}
 	else{
-		if(pulou == 1 && e->confianca < 3){                // se a instrução existe na tabela aumenta ou diminui a confiança no intervalo de 0 a 3
+		if(pulou == 1 && e->confianca < 3){                // se a instrucao existe na tabela aumenta ou diminui a confianca no intervalo de 0 a 3
 			e->confianca++;
-		}else if (pulou = 0 && e->confianca > 0){
+		}else if (pulou == 0 && e->confianca > 0){
 			e->confianca--;
 		}
 	}
+
+	e->alvo = alvoJump;
 }
 
 
@@ -88,7 +100,7 @@ void decode(uint16_t instrucao, Instrucao *i){
 }
 
 void writeBack(Instrucao *codigos, int ULA, int ciclo){
-	if(codigos->formato == 0 && codigos->opcode <= 5){    // iNSTRUÇÕES ARTIMEDICAS
+	if(codigos->formato == 0 && codigos->opcode <= 5){    // iNSTRUCOES ARTIMEDICAS
 		regs[codigos->destino] = ULA;
 	}
 	else if(codigos->formato == 0 && codigos->opcode == 15){   //LOAD
@@ -102,9 +114,10 @@ void writeBack(Instrucao *codigos, int ULA, int ciclo){
 
 }
 
-int execucao(Instrucao *codigos, int ciclo){
+int execucao(Instrucao *codigos, int ciclo, uint16_t *proximo, uint16_t pcInstr){
 
 	int ULA = 0;
+	*proximo = pcInstr + 1;        // Criação de um ponteiro para modificar o valor na memória, ja que só é possível 1 return
 	if(codigos->formato == 0){
 		switch (codigos->opcode){
 
@@ -168,7 +181,11 @@ int execucao(Instrucao *codigos, int ciclo){
 			break;
 		
 		case 63 : // 63   syscall END
-			printf("Encerrando processador...\n");
+			if(regs[0] == 0){
+				printf("Encerrando processador...\n");
+				exit(0);
+			}
+			printf("R0 != 0, Syscall inválido\n");
 			exit(0);
 			
 		
@@ -182,17 +199,20 @@ int execucao(Instrucao *codigos, int ciclo){
 		switch (codigos->opcode){
 
 		case 0 : // 0    JUMP
-			PC = codigos->imediato;
-			printf("Ciclo %d: JUMP -> Pulando para o endereco: %d\n", ciclo, PC);
+			*proximo = codigos->imediato;
+			printf("Ciclo %d: JUMP -> Pulando para o endereco: %d\n", ciclo, *proximo);
+			atualizarTabela(pcInstr, 1, codigos->imediato);
 			break;
 
 		case 1 : // 1     JUMP COND
-			if(regs[codigos->reg] ==1){
-				PC = codigos->imediato;
-				printf("Ciclo %d: JUMP COND -> Pulando para o endereco: %d\n", ciclo, PC);
-				break;
+		
+			if(regs[codigos->reg] == 1){       // se reg =1 ( Siginifica que pulou)
+				*proximo = codigos->imediato;
+				printf("Ciclo %d: JUMP COND -> Pulando para o endereco: %d\n", ciclo, *proximo);
+			}else{
+				printf("Ciclo %d: JUMP COND NAO REALIZADO \n", ciclo);
 			}
-			printf("Ciclo %d: JUMP COND NAO REALIZADO \n", ciclo);
+			atualizarTabela(pcInstr, regs[codigos->reg] == 1 ,codigos->imediato);
 			break;
 
 		case 3 : // 3    MOV
@@ -209,24 +229,8 @@ int execucao(Instrucao *codigos, int ciclo){
 }
 
 void iniciar(){
-
-	Preditor tabela[TABELA_TAM];
-
 	while(PC < MEM_TAM){
-		ciclo++;
-		// BUSCA
-		uint16_t instr = memoria[PC];
-		PC++;
 
-		//DECODE
-		Instrucao codigos;
-		decode(instr, &codigos);
-
-		//Execução
-		int ULA = execucao(&codigos, ciclo);
-			
-		//WriteBack
-		writeBack(&codigos, ULA, ciclo);
 	}
 }
 
@@ -238,5 +242,5 @@ int main (int argc, char **argv){
 
 	load_binary_to_memory(argv[1], memoria, MEM_TAM);
 
-
+	iniciar();
 }
