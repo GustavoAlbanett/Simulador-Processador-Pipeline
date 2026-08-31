@@ -7,44 +7,42 @@
 
 #define TABELA_TAM 32   // TAMANHO TABELA PREDITOR
 
-// MEMORIAS
+// MEMORIA
 uint16_t memoria[MEM_TAM];
-// uint16_t memoriaInstrucao[MEM_TAM];
 
 int ciclo = 0;
 uint16_t PC = 1;
-
 
 // Banco de Registradores
 uint16_t regs[NUM_REGS];
 
 
 typedef struct{
-    uint16_t formato;
-    uint16_t opcode;
-    uint16_t destino;
-    uint16_t reg1;
-    uint16_t reg2;
-	uint16_t reg;
-	uint16_t imediato;
+    uint16_t formato; // Tipo R ou I
+    uint16_t opcode; // Identificador da instrucao
+    uint16_t destino; // Reg destino
+    uint16_t reg1; // Reg 1 usado na instrucao
+    uint16_t reg2; // Reg 2 usado na instrucao
+	uint16_t reg; // Reg unico caso instrucao I
+	uint16_t imediato; // Imediato caso instrucao I
 } Instrucao;
 
 
 typedef struct{
-	uint16_t existe;
-	uint16_t endereco;
-	uint16_t confianca;
-	uint16_t alvo;
-} Preditor;
+	uint16_t existe; // entrada ja foi usada
+	uint16_t endereco; // PC referente a instrucao (Para detectar colisão)
+	uint16_t confianca; // Utiliza o contador da tabela
+	uint16_t alvo; // o endereco destino quando for tomado
+} Preditor; // Entrada na tabela de predicao
 
 Preditor tabela[TABELA_TAM]; // Tabela que armazena as instruções para o preditor
 
 typedef struct{
-	uint16_t existe;
-	uint16_t pc;
-	uint16_t proximoEnd;
-	uint16_t instrTotal; 
-	Instrucao instr;
+	uint16_t existe; // Se existe uma instrucao no latch
+	uint16_t pc; // endereco da instrucao carregada
+	uint16_t proximoEnd; // Endereco previsto como proximo 
+	uint16_t instrTotal; // Utilizado no Intermediario busca -> decode
+	Instrucao instr; // Instrucao carregada em decode -> execute
 } Intermediario;                        // Struct que carrega as informações entre busca -> decode e decode -> Execução/Writeback
 
 uint16_t prever(uint16_t pc){
@@ -229,8 +227,63 @@ int execucao(Instrucao *codigos, int ciclo, uint16_t *proximo, uint16_t pcInstr)
 }
 
 void iniciar(){
-	while(PC < MEM_TAM){
+	// Intermediarios criados antes do while pois e modificado durante a execucao do while
 
+	Intermediario busca_decode = {0}; // Cria um intermediario que simula o pipe line Busca -> decode
+	Intermediario decode_exec = {0}; // Cria um intermediario que simula o pipe line decode -> exec
+
+	while(1){
+		ciclo++;
+
+		uint16_t flush = 0; // atualizado apos a execucao
+		uint16_t pcVerdadeiro = 0; // atualizado apos a execucao puxar o real proximo PC
+
+		// Execucao/Writeback
+		if(decode_exec.existe){
+			
+			uint16_t proximo;
+			int ULA = execucao(&decode_exec.instr, ciclo, &proximo, decode_exec.pc);
+			writeBack(&decode_exec.instr, ULA, ciclo);
+
+			if(proximo != decode_exec.proximoEnd){
+				flush = 1;
+				pcVerdadeiro = proximo;
+			}
+		}
+
+		//  Decode
+		Intermediario novo_decode_exec = {0}; // Cria um intermediario para executar no momento (usado para manter a sequencia mais em decode_exec)
+		if(busca_decode.existe && !flush){
+			novo_decode_exec.existe = 1;
+			novo_decode_exec.pc = busca_decode.pc;
+			novo_decode_exec.proximoEnd = busca_decode.proximoEnd;
+			decode(busca_decode.instrTotal, &novo_decode_exec.instr);
+		}
+
+		//  Busca
+		Intermediario novo_busca_decode = {0};
+		if(!flush && PC < MEM_TAM){
+			novo_busca_decode.existe = 1;
+			novo_busca_decode.pc = PC;
+			novo_busca_decode.instrTotal = memoria[PC];
+
+			uint16_t previsto = prever(PC);
+			novo_busca_decode.proximoEnd = previsto;
+			PC = previsto;
+		}
+
+		if(flush){
+			printf("        [pipeline] FLUSH -> previsao incorreta, PC corrigido para %d\n", pcVerdadeiro);
+			PC = pcVerdadeiro;
+		}
+
+		busca_decode = novo_busca_decode; // Intermediario utilizado no decode a instrucao salva apos buscar
+		decode_exec = novo_decode_exec; // Intermediario utilizado
+
+		if(!busca_decode.existe && !decode_exec.existe && PC >= MEM_TAM){
+			printf("Fim de memoria alcancado sem instrucao de encerramento (syscall).\n");
+			break;
+		}
 	}
 }
 
