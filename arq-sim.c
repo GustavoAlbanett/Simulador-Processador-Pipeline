@@ -97,7 +97,7 @@ void decode(uint16_t instrucao, Instrucao *i){
 	}
 }
 
-void writeBack(Instrucao *codigos, int ULA, int ciclo){
+void writeBack(Instrucao *codigos, uint16_t ULA, int ciclo){
 	if(codigos->formato == 0 && codigos->opcode <= 5){    // iNSTRUCOES ARTIMEDICAS
 		regs[codigos->destino] = ULA;
 	}
@@ -112,9 +112,9 @@ void writeBack(Instrucao *codigos, int ULA, int ciclo){
 
 }
 
-int execucao(Instrucao *codigos, int ciclo, uint16_t *proximo, uint16_t pcInstr){
+uint16_t execucao(Instrucao *codigos, int ciclo, uint16_t *proximo, uint16_t pcInstr){
 
-	int ULA = 0;
+	uint16_t ULA = 0;
 	*proximo = pcInstr + 1;        // Criação de um ponteiro para modificar o valor na memória, ja que só é possível 1 return
 	if(codigos->formato == 0){
 		switch (codigos->opcode){
@@ -242,7 +242,7 @@ void iniciar(){
 		if(decode_exec.existe){
 			
 			uint16_t proximo; // Inicia um proximo que e puxado na execucao
-			int ULA = execucao(&decode_exec.instr, ciclo, &proximo, decode_exec.pc); // executa a ula e preenche proximo com o endereco possivel
+			uint16_t ULA = execucao(&decode_exec.instr, ciclo, &proximo, decode_exec.pc); // executa a ula e preenche proximo com o endereco possivel
 			writeBack(&decode_exec.instr, ULA, ciclo); // writeback
 
 			if(proximo != decode_exec.proximoEnd){ // faz a verificacao se o proximo real e o previsto no preditor sao diferentes se sim faz flush (previsao errada)
