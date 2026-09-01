@@ -69,7 +69,7 @@ void atualizarTabela(uint16_t pc, uint16_t pulou, uint16_t alvoJump){
 			e->confianca = 0;
 		}
 	}
-	else{
+	 else{
 		if(pulou == 1 && e->confianca < 3){                // se a instrucao existe na tabela aumenta ou diminui a confianca no intervalo de 0 a 3
 			e->confianca++;
 		}else if (pulou == 0 && e->confianca > 0){
@@ -273,7 +273,7 @@ void iniciar(){
 		}
 
 		if(flush){
-			printf("        [pipeline] FLUSH -> previsao incorreta, PC corrigido para %d\n", pcVerdadeiro);
+			printf("Ciclo %d     [pipeline] FLUSH -> previsao incorreta, PC corrigido para %d\n", ciclo, pcVerdadeiro);
 			PC = pcVerdadeiro;
 		}
 
