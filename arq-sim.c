@@ -235,46 +235,46 @@ void iniciar(){
 	while(1){
 		ciclo++;
 
-		uint16_t flush = 0; // atualizado apos a execucao
-		uint16_t pcVerdadeiro = 0; // atualizado apos a execucao puxar o real proximo PC
+		uint16_t flush = 0; // atualizado apos a execucao/writeback
+		uint16_t pcVerdadeiro = 0; // utilizado caso seja necessario fazer um flush, e atualizar o PC atual
 
 		// Execucao/Writeback
 		if(decode_exec.existe){
 			
-			uint16_t proximo;
-			int ULA = execucao(&decode_exec.instr, ciclo, &proximo, decode_exec.pc);
-			writeBack(&decode_exec.instr, ULA, ciclo);
+			uint16_t proximo; // Inicia um proximo que e puxado na execucao
+			int ULA = execucao(&decode_exec.instr, ciclo, &proximo, decode_exec.pc); // executa a ula e preenche proximo com o endereco possivel
+			writeBack(&decode_exec.instr, ULA, ciclo); // writeback
 
-			if(proximo != decode_exec.proximoEnd){
+			if(proximo != decode_exec.proximoEnd){ // faz a verificacao se o proximo real e o previsto no preditor sao diferentes se sim faz flush (previsao errada)
 				flush = 1;
 				pcVerdadeiro = proximo;
 			}
 		}
 
 		//  Decode
-		Intermediario novo_decode_exec = {0}; // Cria um intermediario para executar no momento (usado para manter a sequencia mais em decode_exec)
+		Intermediario novo_decode_exec = {0}; // Cria um intermediario preenchido dentro do decode e salvo em outra variavel de controle que sera utilizada na execucao
 		if(busca_decode.existe && !flush){
-			novo_decode_exec.existe = 1;
-			novo_decode_exec.pc = busca_decode.pc;
-			novo_decode_exec.proximoEnd = busca_decode.proximoEnd;
-			decode(busca_decode.instrTotal, &novo_decode_exec.instr);
+			novo_decode_exec.existe = 1; // Garante a existencia do intermediario decode exec utilizado na execucao/writeback
+			novo_decode_exec.pc = busca_decode.pc; // Salva o pc atual da instrucao que sera utilizado na execucao
+			novo_decode_exec.proximoEnd = busca_decode.proximoEnd; // Salva o pc da proxima instrucao que foi prevista
+			decode(busca_decode.instrTotal, &novo_decode_exec.instr); // Realiza o decode da instrucao atual
 		}
 
 		//  Busca
-		Intermediario novo_busca_decode = {0};
+		Intermediario novo_busca_decode = {0}; // Cria um intermediario preenchido dentro da busca e salvo em outra variavel de controle que sera utilizado no decode
 		if(!flush && PC < MEM_TAM){
-			novo_busca_decode.existe = 1;
-			novo_busca_decode.pc = PC;
-			novo_busca_decode.instrTotal = memoria[PC];
+			novo_busca_decode.existe = 1; // Garante a existencia do intermediario busca decode utilizado no decode
+			novo_busca_decode.pc = PC; // Salva o pc atual da instrucao que sera utilizada no decode
+			novo_busca_decode.instrTotal = memoria[PC]; // Captura a instrucao da memoria que sera decodificada
 
-			uint16_t previsto = prever(PC);
-			novo_busca_decode.proximoEnd = previsto;
-			PC = previsto;
+			uint16_t previsto = prever(PC); // Realiza a predicao
+			novo_busca_decode.proximoEnd = previsto; // Salva como o possivel proximo endereco
+			PC = previsto; // Salva pro PC atual deduzindo que a previsao e correta (O que sera verificada no futuro pela execucao)
 		}
 
 		if(flush){
 			printf("Ciclo %d     [pipeline] FLUSH -> previsao incorreta, PC corrigido para %d\n", ciclo, pcVerdadeiro);
-			PC = pcVerdadeiro;
+			PC = pcVerdadeiro; // Em caso de flush volta o PC pra possicao correta
 		}
 
 		busca_decode = novo_busca_decode; // Intermediario utilizado no decode a instrucao salva apos buscar
